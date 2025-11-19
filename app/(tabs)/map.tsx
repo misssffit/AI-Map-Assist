@@ -186,7 +186,22 @@ export default function MapScreen() {
           longitude: item.geometry.coordinates[0],
         }));
 
-        const enriched = parsed;
+        const enriched = parsed.map(async (p) => {
+          const googlePhoto = await fetch("https://ai-map-assist-1.onrender.com/maps/photo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: p.name,
+              lat: p.latitude,
+              lon: p.longitude,
+            }),
+          }).then(r => r.json());
+
+          return {
+            ...p,
+            image: googlePhoto || p.image || ""
+          };
+        });
 
         let rankedPlaces = enriched;
         if (keywords.length > 0) {

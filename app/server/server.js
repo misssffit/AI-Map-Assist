@@ -2,6 +2,8 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
+import cheerio from "cheerio";
+import fetch from "node-fetch";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
@@ -181,4 +183,88 @@ app.get("/maps/tiles/:style/:z/:x/:y.png", async (req, res) => {
     console.error("Tile proxy error:", e);
     res.status(500).send("Tile error");
   }
+});
+
+app.post("/maps/photo", async (req, res) => {
+  const { name } = req.body;
+
+  if (!name) return res.json("");
+
+  const searchQuery = `${name} фото`;
+
+  // 🔵 1. Скрейпер DuckDuckGo Images
+  async function getDuckDuckGoImage() {
+    try {
+      const url = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&iar=images&iax=images&ia=images`;
+      const html = await fetch(url).then(r => r.text());
+      const $ = cheerio.load(html);
+
+      let img = null;
+      $("img").each((i, el) => {
+        const src = $(el).attr("src");
+        if (src && src.startsWith("http")) {
+          img = src;
+          return false;
+        }
+      });
+
+      return img;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 🔵 2. Скрейпер Bing Images
+  async function getBingImage() {
+    try {
+      const url = `https://www.bing.com/images/search?q=${encodeURIComponent(searchQuery)}`;
+      const html = await fetch(url).then(r => r.text());
+      const $ = cheerio.load(html);
+
+      const img = $("img").first().attr("src");
+
+      return img ? img : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 🔵 3. Скрейпер Google Images (обхід API)
+  async function getGoogleImage() {
+    try {
+      const url = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}&tbm=isch`;
+      const html = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0"
+        }
+      }).then(r => r.text());
+
+      const $ = cheerio.load(html);
+
+      let img = null;
+      $("img").each((i, el) => {
+        const src = $(el).attr("src");
+        if (src && src.startsWith("http")) {
+          img = src;
+          return false;
+        }
+      });
+
+      return img;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 🟢 Викликаємо всі парсери паралельно
+  const [googleImg, bingImg, duckImg] = await Promise.all([
+    getGoogleImage(),
+    getBingImage(),
+    getDuckDuckGoImage(),
+  ]);
+
+  // 🟢 Вибір найкращого фото
+  const finalImage = googleImg || bingImg || duckImg || "";
+
+  res.json(finalImage);
 });
