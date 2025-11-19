@@ -2,8 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
-import cheerio from "cheerio";
-
+import * as cheerio from "cheerio";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 
