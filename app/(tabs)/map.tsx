@@ -21,9 +21,7 @@ import {
 } from 'lucide-react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
-import Constants from 'expo-constants';
 import { analyzeQuery, rankPlacesByRelevance} from '../../assets/lib/ai';
-import { getGooglePhoto } from "../../assets/lib/googlePhotos";
 const { width, height } = Dimensions.get('window');
 
 
@@ -98,7 +96,6 @@ export default function MapScreen() {
   const params = useLocalSearchParams();
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const GEOAPIFY_API_KEY = Constants.expoConfig?.extra?.geoapifyApiKey;
   const mapRef = useRef<MapView | null>(null);
   const searchQuery = params.query as string;
   const [userLocation, setUserLocation] = useState<{
@@ -153,19 +150,16 @@ export default function MapScreen() {
         setLoadingText("Отримуємо місця з Geoapify…");
 
         // 2) Викликаємо Geoapify по опису
-        const url =
-        "https://api.geoapify.com/v2/places?" +
-        `categories=${encodeURIComponent(geoCategory)}` +
-        `&filter=circle:${userLocation.lon},${userLocation.lat},2500` +
-        `&bias=proximity:${userLocation.lon},${userLocation.lat}` +
-        `&limit=12` +
-        `&apiKey=${GEOAPIFY_API_KEY}`;
+       const res = await fetch("https://ai-map-assist-1.onrender.com/maps/places", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lat: userLocation.lat,
+            lon: userLocation.lon,
+            category: geoCategory,
+          }),
+        });
 
-        // Якщо AI дав слово якого немає — ставимо базову категорію:
-
-        console.log('Geoapify URL:', url);
-
-        const res = await fetch(url);
         const data = await res.json();
         console.log('Raw Geoapify response:', data);
         // 3) Перетворюємо дані на наш формат
@@ -194,7 +188,15 @@ export default function MapScreen() {
 
         const enriched = await Promise.all(
           parsed.map(async (p) => {
-            const googlePhoto = await getGooglePhoto(p.name, p.latitude, p.longitude);
+            const googlePhoto = await fetch("https://ai-map-assist-1.onrender.com/maps/photo", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: p.name,
+                lat: p.latitude,
+                lon: p.longitude,
+              })
+            }).then(r => r.json());
 
             return {
               ...p,
@@ -278,9 +280,9 @@ export default function MapScreen() {
         >
           {/* Geoapify tile layer */}
           <UrlTile
-            urlTemplate={`https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`}
-            maximumZ={20}
-            zIndex={0}
+             urlTemplate={`https://ai-map-assist-1.onrender.com/maps/tiles/osm-carto/{z}/{x}/{y}.png`}
+             maximumZ={20}
+             zIndex={0}
           />
 
           {/* Маркери із твоїх places (тимчасово координати за id) */}

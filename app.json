@@ -20,14 +20,7 @@
     "plugins": ["expo-router", "expo-font", "expo-web-browser"],
     "experiments": {
       "typedRoutes": true
-    },
-    "extra": {
-      "geoapifyApiKey": "11d7e2a6b6bf4e37a3f940c4a8157422",
-      "geminiApiKey": "AIzaSyDpWzcRM2v4SBDF_ZaWRGwpH86TWKapvHc",
-      "yelpApiKey": "zXnej-d_UX7h34O7NN0jV90-MPlN34csxs9vTj0my-zlf6Ly69rjcPTE9Vr5E0wjGDP0LZK6QFlGmkbEva6Z5wfbb4bXNVKjUNrAJTzBdSNJnc4jlaHn1MOK554baXYx",
-      "foursquareApiKey": "0HRY1AALDBIADXLFKCPTKLEGOL11Z05SYPGYVTO2JQRPSTHM",
-      "pexelsApiKey": "azNo9LgKkKbh3CEgNGVHbkybHw1AURR0hkh59BDYN9yYtr3lz8TujUhT",
-      "serpApiKey": "020ea86d80d057a3a23bcb062826939a8646f8b3b5022796d4e44c4a7fdcb579"
     }
+    
   }
 }
