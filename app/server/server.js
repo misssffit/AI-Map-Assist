@@ -9,10 +9,11 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-app.get("/photo", async (req, res) => {
+app.get("/", (req, res) => {
   res.send("Backend is running 🚀");
 });
 
