@@ -21,9 +21,9 @@ import {
 } from 'lucide-react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { analyzeQuery, rankPlacesByRelevance} from '../../assets/lib/ai';
 const { width, height } = Dimensions.get('window');
-
+import { analyzeQuery, rankPlacesByRelevance } from "../../assets/lib/ai";
+const BACKEND_URL = "https://ai-map-assist-1.onrender.com";
 
 type Place = {
   id: number;
@@ -150,15 +150,15 @@ export default function MapScreen() {
         setLoadingText("Отримуємо місця з Geoapify…");
 
         // 2) Викликаємо Geoapify по опису
-       const res = await fetch("https://ai-map-assist-1.onrender.com/maps/places", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lat: userLocation.lat,
-            lon: userLocation.lon,
-            category: geoCategory,
-          }),
-        });
+      const res = await fetch(`${BACKEND_URL}/maps/places`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: userLocation.lat,
+          lon: userLocation.lon,
+          category: geoCategory,
+        }),
+      });
 
         const data = await res.json();
         console.log('Raw Geoapify response:', data);
@@ -278,7 +278,7 @@ export default function MapScreen() {
         >
           {/* Geoapify tile layer */}
           <UrlTile
-             urlTemplate={`https://ai-map-assist-1.onrender.com/maps/tiles/osm-carto/{z}/{x}/{y}.png`}
+             urlTemplate={`${BACKEND_URL}/maps/tiles/osm-carto/{z}/{x}/{y}.png`}
              maximumZ={20}
              zIndex={0}
           />
