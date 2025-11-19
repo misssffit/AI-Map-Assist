@@ -185,11 +185,12 @@ app.get("/maps/tiles/:style/:z/:x/:y.png", async (req, res) => {
 });
 
 app.post("/maps/photo", async (req, res) => {
-  const { name } = req.body;
+  const { name, lat, lon, categoryHints = [] } = req.body;
+  const categoryText = categoryHints.join(" ");
 
   if (!name) return res.json("");
-
-  const searchQuery = `${name} фото`;
+  
+  const searchQuery = `${name} ${lat} ${lon} заклад меню інтерʼєр фото`;
 
   // 🔵 1. Скрейпер DuckDuckGo Images
   async function getDuckDuckGoImage() {

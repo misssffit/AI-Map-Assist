@@ -129,23 +129,23 @@ export default function MapScreen() {
         // 1) Отримуємо інтерпретацію запиту від ШІ
         const { category, keywords } = await analyzeQuery(searchQuery);
         
-        const categoryMap: Record<string, string> = {
-          кафе: 'catering.cafe',
-          "кав'ярня": 'catering.cafe.coffee_shop',
-          кавярня: 'catering.cafe.coffee_shop',
-          ресторан: 'catering.restaurant',
-          піцерія: 'catering.restaurant.pizza',
-          бар: 'catering.bar',
-          паб: 'catering.pub',
-          фастфуд: 'catering.fast_food',
-          бутерброди: 'catering.fast_food.sandwich',
+        const categoryWords: Record<string, string[]> = {
+          "catering.cafe": ["кафе", "кав'ярня", "coffee shop"],
+          "catering.cafe.coffee_shop": ["кав'ярня", "coffee shop"],
+          "catering.restaurant": ["ресторан"],
+          "catering.restaurant.pizza": ["піцерія", "pizza restaurant"],
+          "catering.bar": ["бар", "pub"],
+          "catering.pub": ["паб", "бар"],
+          "catering.fast_food": ["фастфуд", "fast food"],
+          "park": ["парк"],
+          "entertainment.cinema": ["кінотеатр", "cinema"],
         };
         
 
         setAiCategory(category);
         setAiKeywords(keywords);
 
-        const geoCategory = categoryMap[category.toLowerCase()] || 'catering.cafe';
+        const geoCategory = categoryWords[category.toLowerCase()] || 'catering.cafe';
 
         setLoadingText("Отримуємо місця з Geoapify…");
 
@@ -186,22 +186,24 @@ export default function MapScreen() {
           longitude: item.geometry.coordinates[0],
         }));
 
-        const enriched = parsed.map(async (p) => {
-          const googlePhoto = await fetch("https://ai-map-assist-1.onrender.com/maps/photo", {
+        const enriched = await Promise.all(parsed.map(async (p) => {
+          const categoryHints = categoryWords[p.category] || [];
+          const googlePhoto = await fetch(`${BACKEND_URL}/maps/photo`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               name: p.name,
               lat: p.latitude,
               lon: p.longitude,
-            }),
+              categoryHints
+            })
           }).then(r => r.json());
 
           return {
             ...p,
-            image: googlePhoto || p.image || ""
+            image: googlePhoto || "",
           };
-        });
+}));
 
         let rankedPlaces = enriched;
         if (keywords.length > 0) {
