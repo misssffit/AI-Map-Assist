@@ -161,44 +161,7 @@ app.post("/maps/places", async (req, res) => {
   }
 });
 
-app.post("/maps/photo", async (req, res) => {
-  try {
-    const { name, lat, lon } = req.body;
 
-    const searchUrl = `https://places.googleapis.com/v1/places:searchText?key=${process.env.GOOGLE_PLACES_KEY}`;
-
-    const payload = {
-      textQuery: name,
-      locationBias: {
-        circle: {
-          center: { latitude: lat, longitude: lon },
-          radius: 500,
-        },
-      },
-    };
-
-    const response = await fetch(searchUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-FieldMask": "places.photos",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const json = await response.json();
-
-    const photoId = json?.places?.[0]?.photos?.[0]?.name;
-    if (!photoId) return res.json("");
-
-    const photoUrl = `https://places.googleapis.com/v1/${photoId}/media?key=${process.env.GOOGLE_PLACES_KEY}&maxHeightPx=800`;
-
-    res.json(photoUrl);
-  } catch (e) {
-    console.error("Photo error:", e);
-    res.json("");
-  }
-});
 
 app.get("/maps/tiles/:style/:z/:x/:y.png", async (req, res) => {
   try {
