@@ -23,53 +23,75 @@ app.post("/gemini/analyze", async (req, res) => {
     const { query } = req.body;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const allowedCategories = [
+      "catering.cafe",
+      "catering.cafe.coffee_shop",
+      "catering.restaurant",
+      "catering.restaurant.pizza",
+      "catering.fast_food",
+      "catering.bar",
+      "catering.pub",
+      "entertainment.cinema",
+      "park"
+    ];
+
     const prompt = `
-      Ти — асистент для мобільного застосунку з картою.
-      Завдання: зрозуміти, що саме шукає користувач.
+      Ти — система аналізу запитів користувача для мобільного застосунку з картою.
 
-      Користувач вводить запит природною мовою, наприклад:
-      - "затишне кафе з Wi-Fi та розетками"
-      - "дешевий ресторан піци, який працює допізна"
-      - "романтичний бар з живою музикою"
+      ❗ Твоє завдання:
+      1. Визначити КАТЕГОРІЮ закладу ТІЛЬКИ з цього списку:
+      ${allowedCategories.join("\n")}
 
-      Твоє завдання:
-      1. Визнач одну найбільш відповідну категорію Geoapify 
-        (наприклад: catering.cafe, catering.restaurant, catering.bar, entertainment.cinema, accommodation.hotel, park, shop тощо)
-      2. Витягни 2–5 ключових слів, які описують, що користувач хоче знайти 
-        (наприклад: "затишне", "wifi", "дешево", "романтичне", "тихо", "пізно працює").
-      3. Відповідай **тільки** у форматі JSON, без жодного тексту навколо:
-        {
-          "category": "catering.cafe",
-          "keywords": ["затишне", "wifi", "тихе"]
-        }
+      2. Визначити 2–6 ключових слів із запиту користувача.
 
-      Користувацький запит: "${query}"
-      (Використовуй українську мову, якщо можливо)
-    `;
+      3. Відповідати ТІЛЬКИ У ФОРМАТІ JSON:
+      {
+        "category": "...",
+        "keywords": ["...", "..."]
+      }
+
+      ❗ Обов’язково: 
+      – category має бути лише з whitelist
+      – keywords завжди має бути масивом мінімум з 2 слів
+      – не вигадуй нових категорій
+      – не додавай тексту поза JSON
+
+      Користувацький запит:
+      "${query}"
+      `;
 
     const result = await model.generateContent(prompt);
     let text = result.response.text().trim();
 
-    // твої ж очищення:
+    // Очищення JSON
     text = text
       .replace(/```json/gi, "")
       .replace(/```/g, "")
       .replace(/^[`\s\n\r]+|[`\s\n\r]+$/g, "")
       .trim();
 
+    // Вирізання JSON
     const jsonStart = text.indexOf("{");
     const jsonEnd = text.lastIndexOf("}");
-    if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON not found in AI response");
-    const jsonPart = text.substring(jsonStart, jsonEnd + 1);
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error("JSON not found");
 
+    const jsonPart = text.substring(jsonStart, jsonEnd + 1);
     const parsed = JSON.parse(jsonPart);
 
-    if (!parsed.category) parsed.category = "catering.cafe";
-    if (!Array.isArray(parsed.keywords)) parsed.keywords = [];
+    // 🔥 Гарантії стабільності:
+    if (!allowedCategories.includes(parsed.category)) {
+      parsed.category = "catering.cafe";
+    }
+
+    if (!Array.isArray(parsed.keywords) || parsed.keywords.length < 2) {
+      parsed.keywords = [];
+    }
 
     res.json(parsed);
+
   } catch (e) {
-    console.error("❌ Помилка розбору відповіді AI:", e);
+    console.error("❌ analyze error:", e);
     res.json({ category: "catering.cafe", keywords: [] });
   }
 });

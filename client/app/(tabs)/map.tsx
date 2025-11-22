@@ -140,12 +140,18 @@ export default function MapScreen() {
           "park": ["парк"],
           "entertainment.cinema": ["кінотеатр", "cinema"],
         };
-        
+        const reverseCategoryMap: Record<string, string> = {};
+
+        Object.entries(categoryWords).forEach(([geoKey, words]) => {
+          words.forEach((word) => {
+            reverseCategoryMap[word.toLowerCase()] = geoKey;
+          });
+        }); 
+
+        const geoCategory = reverseCategoryMap[category.toLowerCase()] || "catering.cafe";
 
         setAiCategory(category);
         setAiKeywords(keywords);
-
-        const geoCategory = categoryWords[category.toLowerCase()] || 'catering.cafe';
 
         setLoadingText("Отримуємо місця з Geoapify…");
 
