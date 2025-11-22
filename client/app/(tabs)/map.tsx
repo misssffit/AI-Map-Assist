@@ -182,13 +182,64 @@ export default function MapScreen() {
   }, [searchQuery, userLocation]);
 
   // ─── 3. Обробка натиску на заклад ────────────────────────────────────
-  const handlePlaceSelect = (place: Place) => {
-    setSelectedPlace(place);
+  const handlePlaceSelect = async (place: Place) => {
+    setLoading(true);
+    setLoadingText("Завантажуємо деталі місця…");
+
+    const fullPlace = await fetchPlaceDetails(place);
+
+    setLoading(false);
+
     router.push({
       pathname: '/place-detail',
-      params: { placeId: place.id },
+      params: { place: JSON.stringify(fullPlace) },
     });
   };
+
+  const fetchPlaceDetails = async (place: Place) => {
+  try {
+    // 1. Google Details
+    const detailsRes = await fetch(`${BACKEND_URL}/places/details`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placeId: place.id })
+    });
+
+    const details = await detailsRes.json();
+
+    // 2. AI-опис
+    const aiRes = await fetch(`${BACKEND_URL}/ai/describePlace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: details.name,
+        address: details.formatted_address,
+        rating: details.rating,
+        keywords: aiKeywords,
+        placeDetails: details
+      })
+    });
+
+    const aiData = await aiRes.json();
+
+    // 3. Повертаємо готовий об’єкт
+    return {
+      ...place,
+      description: aiData.description || "Опис недоступний",
+      phone: details.formatted_phone_number || "",
+      workingHours: details.opening_hours?.weekday_text || [],
+      address: details.formatted_address || place.address,
+      image: place.image,
+    };
+
+      } catch (e) {
+        console.log("❌ Error loading details:", e);
+        return {
+          ...place,
+          description: "Опис тимчасово недоступний",
+        };
+      }
+    };
 
   // ─── 4. Центрування карти на користувачі ─────────────────────────────
   const centerOnUser = async () => {

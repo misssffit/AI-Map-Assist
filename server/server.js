@@ -267,30 +267,31 @@ app.post("/places/details", async (req, res) => {
 // AI-опис місця
 app.post("/ai/describePlace", async (req, res) => {
   try {
-    const { name, address, rating, keywords = [] } = req.body;
+    const { name, address, rating, keywords = [], placeDetails = {} } = req.body;
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
-      Напиши розширений, але лаконічний опис закладу для мобільного застосунку.
-      Обов'язково українською.
+      Створи унікальний, гарно написаний опис закладу українською мовою.
+      Опиши атмосферу, враження, тип аудиторії та причини, чому місце може підійти користувачу.
 
+      Використай такі дані:
       Назва: ${name}
       Адреса: ${address}
       Рейтинг: ${rating || "без рейтингу"}
-      Побажання користувача (ключові слова): ${keywords.join(", ")}
+      Побажання користувача: ${keywords.join(", ")}
+      Google details: ${JSON.stringify(placeDetails)}
 
-      У тексті коротко розкажи:
-      – Яка там атмосфера?
-      – Для кого підходить (робота, побачення, сім'я, спорт, прогулянки)?
-      – Які основні плюси саме для такого запиту користувача?
-      – Що робить це місце особливим?
+      Вимоги:
+      - Тон: дружній, професійний, живий, без канцелярщини.
+      - Обсяг: 3–6 речень.
+      - Ніяких списків, маркерів, нумерацій.
+      - НЕ перераховувати дані із JSON (типу "рейтинг 4.7" або "Адреса така-то").
+      - Просто створи гарний, емоційний текст, який читається природно.
+      `;
 
-      Не використовуй списки, просто 1–2 абзаци тексту.
-    `;
-
-    const result = await model.generateContent(prompt);
-    const description = result.response.text().trim();
+    const r = await model.generateContent(prompt);
+    const description = r.response.text().trim();
 
     res.json({ description });
   } catch (e) {
