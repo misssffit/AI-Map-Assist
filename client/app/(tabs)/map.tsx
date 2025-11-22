@@ -209,11 +209,24 @@ export default function MapScreen() {
             ...p,
             image: googlePhoto || "",
           };
-}));
+        }));
 
         let rankedPlaces = enriched;
         if (keywords.length > 0) {
-          rankedPlaces = await rankPlacesByRelevance(enriched, keywords);
+          try {
+            const ranked = await rankPlacesByRelevance(enriched, keywords);
+
+            if (Array.isArray(ranked) && ranked.length > 0) {
+              rankedPlaces = ranked;
+            } else {
+              console.log("⚠️ Rank returned invalid data:", ranked);
+              rankedPlaces = enriched; // fallback
+            }
+
+          } catch (e) {
+            console.log("⚠️ Rank failed:", e);
+            rankedPlaces = enriched;
+          }
         }
 
         console.log('Ranked places:', rankedPlaces);
