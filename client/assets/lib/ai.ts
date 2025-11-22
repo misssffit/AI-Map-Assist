@@ -1,6 +1,13 @@
 const BASE_URL = "https://ai-map-assist-1.onrender.com";
 
-// 🔹 1) Аналізуємо текст запиту через бекенд
+/* 
+  1) 🧠 Аналіз тексту запиту через Gemini
+     Повертає:
+     {
+       category?: string,        // опціонально
+       keywords: string[]        // ключові слова для ранжування
+     }
+*/
 export async function analyzeQuery(query: string) {
   try {
     const response = await fetch(`${BASE_URL}/gemini/analyze`, {
@@ -12,15 +19,21 @@ export async function analyzeQuery(query: string) {
     });
 
     const data = await response.json();
-    // очікуємо такий формат: { category: string, keywords: string[] }
-    return data;
+    return {
+      category: data.category || null,
+      keywords: Array.isArray(data.keywords) ? data.keywords : [],
+    };
   } catch (e) {
     console.error("❌ Помилка виклику backend /gemini/analyze:", e);
-    return { category: "catering.cafe", keywords: [] }; // fallback
+    return { category: null, keywords: [] }; // fallback для Google Places
   }
 }
 
-// 🔹 2) Ранжування місць через бекенд
+/*
+  2) 🧠 Ранжування закладів
+     – передаємо масив Google Places
+     – Gemini повертає відсортований масив
+*/
 export async function rankPlacesByRelevance(places: any[], keywords: string[]) {
   try {
     const response = await fetch(`${BASE_URL}/gemini/rank`, {
@@ -32,8 +45,14 @@ export async function rankPlacesByRelevance(places: any[], keywords: string[]) {
     });
 
     const data = await response.json();
-    // очікуємо масив закладів у вже відсортованому порядку
-    return data;
+    
+    // очікуємо масив відсортованих place-об’єктів
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    console.warn("⚠️ Некоректний формат ранжування:", data);
+    return places;
   } catch (e) {
     console.error("❌ Помилка виклику backend /gemini/rank:", e);
     return places; // fallback

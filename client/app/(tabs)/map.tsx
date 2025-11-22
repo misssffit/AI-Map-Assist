@@ -15,18 +15,19 @@ import {
   MapPin,
   Star,
   Navigation,
-  Phone,
   Clock,
   ExternalLink,
 } from 'lucide-react-native';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-const { width, height } = Dimensions.get('window');
-import { analyzeQuery, rankPlacesByRelevance } from "../../assets/lib/ai";
-const BACKEND_URL = "https://ai-map-assist-1.onrender.com";
+const { height } = Dimensions.get('window');
+
+import { analyzeQuery, rankPlacesByRelevance } from '../../assets/lib/ai';
+
+const BACKEND_URL = 'https://ai-map-assist-1.onrender.com';
 
 type Place = {
-  id: number;
+  id: string;
   name: string;
   rating: number;
   distance: string;
@@ -41,204 +42,146 @@ type Place = {
   longitude: number;
 };
 
-/*const mockPlaces: Place[] = [
-  {
-    id: 1,
-    name: 'Кафе Lviv Croissants',
-    rating: 4.8,
-    distance: '0.2 км',
-    address: 'вул. Городоцька, 42',
-    category: 'Кафе',
-    openNow: true,
-    image:
-      'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=400',
-    description: 'Затишне кафе з найкращими круасанами у місті',
-    phone: '+380 67 123 45 67',
-    workingHours: '07:00 – 22:00',
-    latitude: 49.8411,
-    longitude: 24.0315,
-  },
-  {
-    id: 2,
-    name: 'Ресторан Bernardo',
-    rating: 4.6,
-    distance: '0.5 км',
-    address: 'пл. Ринок, 14',
-    category: 'Ресторан',
-    openNow: true,
-    image:
-      'https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=400',
-    description: 'Елегантний ресторан європейської кухні',
-    phone: '+380 67 234 56 78',
-    workingHours: '12:00 – 24:00',
-    latitude: 49.8418,
-    longitude: 24.0305,
-  },
-  {
-    id: 3,
-    name: 'Парк Стрийський',
-    rating: 4.9,
-    distance: '1.2 км',
-    address: 'вул. Паркова, 1',
-    category: 'Парк',
-    openNow: true,
-    image:
-      'https://images.pexels.com/photos/1309763/pexels-photo-1309763.jpeg?auto=compress&cs=tinysrgb&w=400',
-    description: 'Великий зелений парк для прогулянок',
-    phone: '',
-    workingHours: 'Цілодобово',
-    latitude: 49.8236,
-    longitude: 24.0236,
-  },
-];*/
-
 export default function MapScreen() {
   const params = useLocalSearchParams();
+  const searchQuery = (params.query as string) || '';
+
   const [places, setPlaces] = useState<Place[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const mapRef = useRef<MapView | null>(null);
-  const searchQuery = params.query as string;
-  const [userLocation, setUserLocation] = useState<{
-    lat: number;
-    lon: number;
-  } | null>(null);
 
-  const [aiCategory, setAiCategory] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
+
+  const [aiCategory, setAiCategory] = useState<string | null>(null); // опціонально
   const [aiKeywords, setAiKeywords] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState("Пошук…");
+  const [loadingText, setLoadingText] = useState('Пошук…');
 
+  // ─── 1. Отримуємо поточну локацію користувача ───────────────────────
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
-      let loc = await Location.getCurrentPositionAsync({});
+      const loc = await Location.getCurrentPositionAsync({});
       setUserLocation({ lat: loc.coords.latitude, lon: loc.coords.longitude });
     })();
   }, []);
 
+  // ─── 2. Коли є локація + запит → виконуємо AI-аналіз і пошук ─────────
   useEffect(() => {
     if (!userLocation || !searchQuery.trim()) return;
 
     (async () => {
       try {
         setLoading(true);
-        setLoadingText("Аналізуємо запит користувача за допомогою ШІ…");
-        // 1) Отримуємо інтерпретацію запиту від ШІ
-        const { category, keywords } = await analyzeQuery(searchQuery);
-        
-        const categoryWords: Record<string, string[]> = {
-          "catering.cafe": ["кафе", "кав'ярня", "coffee shop"],
-          "catering.cafe.coffee_shop": ["кав'ярня", "coffee shop"],
-          "catering.restaurant": ["ресторан"],
-          "catering.restaurant.pizza": ["піцерія", "pizza restaurant"],
-          "catering.bar": ["бар", "pub"],
-          "catering.pub": ["паб", "бар"],
-          "catering.fast_food": ["фастфуд", "fast food"],
-          "park": ["парк"],
-          "entertainment.cinema": ["кінотеатр", "cinema"],
-        };
-        const reverseCategoryMap: Record<string, string> = {};
+        setLoadingText('Аналізуємо запит користувача за допомогою ШІ…');
 
-        Object.entries(categoryWords).forEach(([geoKey, words]) => {
-          words.forEach((word) => {
-            reverseCategoryMap[word.toLowerCase()] = geoKey;
-          });
-        }); 
-
-        const geoCategory = reverseCategoryMap[category.toLowerCase()] || "catering.cafe";
+        // 2.1. Аналізуємо запит через Gemini
+        const aiResult = await analyzeQuery(searchQuery);
+        const category = aiResult.category || null;
+        const keywords: string[] = aiResult.keywords || [];
 
         setAiCategory(category);
         setAiKeywords(keywords);
 
-        setLoadingText("Отримуємо місця з Geoapify…");
+        // 2.2. Шукаємо місця через Google Places (бекенд /places/search)
+        setLoadingText('Шукаємо місця через Google Places…');
 
-        // 2) Викликаємо Geoapify по опису
-      const res = await fetch(`${BACKEND_URL}/maps/places`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lat: userLocation.lat,
-          lon: userLocation.lon,
-          category: geoCategory,
-        }),
-      });
+        const placesRes = await fetch(`${BACKEND_URL}/places/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat: userLocation.lat,
+            lon: userLocation.lon,
+            keyword: searchQuery,
+          }),
+        });
 
-        const data = await res.json();
-        console.log('Raw Geoapify response:', data);
-        // 3) Перетворюємо дані на наш формат
-        if (!data.features || !Array.isArray(data.features)) {
+        const rawPlaces = await placesRes.json();
+        console.log('Raw Google Places response:', rawPlaces);
+
+        if (!Array.isArray(rawPlaces) || rawPlaces.length === 0) {
           setPlaces([]);
           setLoading(false);
           return;
         }
 
-        setLoadingText("Аналізуємо результати ШІ…");
+        // 2.3. Перетворюємо Google Places → наш тип Place
+        setLoadingText('Готуємо результати…');
 
-        const parsed = data.features.map((item: any) => ({
-          id: item.properties.place_id,
-          name: item.properties.name || 'Unknown name',
-          address: item.properties.formatted || '',
-          category: item.properties.categories?.[0] || 'Unknown',
-          openNow: item.properties.open_now ?? false,
-          rating: item.properties.rating || 4.3,
-          distance: '—',
-          description: item.properties.datasource?.raw?.description || '',
-          image: item.properties.datasource?.raw?.photo || '',
-          workingHours: item.properties.datasource?.raw?.opening_hours || '',
-          latitude: item.geometry.coordinates[1],
-          longitude: item.geometry.coordinates[0],
-        }));
+        const parsed: Place[] = await Promise.all(
+          rawPlaces.map(async (p: any) => {
+            let imageUrl = '';
 
-        const enriched = await Promise.all(parsed.map(async (p) => {
-          const categoryHints = categoryWords[p.category] || [];
-          const googlePhoto = await fetch(`${BACKEND_URL}/maps/photo`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: p.name,
-              lat: p.latitude,
-              lon: p.longitude,
-              categoryHints
-            })
-          }).then(r => r.json());
+            // Фото через бекенд /places/photo (photo_reference → URL)
+            if (p.photos && p.photos[0]?.photo_reference) {
+              try {
+                const photoRes = await fetch(`${BACKEND_URL}/places/photo`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    photoReference: p.photos[0].photo_reference,
+                  }),
+                });
+                const photoData = await photoRes.json();
+                if (photoData?.url) {
+                  imageUrl = photoData.url;
+                }
+              } catch (e) {
+                console.log('Фото не завантажилось:', e);
+              }
+            }
 
-          return {
-            ...p,
-            image: googlePhoto || "",
-          };
-        }));
+            return {
+              id: p.place_id,
+              name: p.name || 'Невідомий заклад',
+              rating: typeof p.rating === 'number' ? p.rating : 4.3,
+              distance: '—',
+              address: p.vicinity || '',
+              category: Array.isArray(p.types) && p.types.length > 0 ? p.types[0] : 'place',
+              openNow: p.opening_hours?.open_now ?? false,
+              image: imageUrl,
+              description: '', // детальний опис краще генерувати на екрані деталізації
+              phone: '',
+              workingHours: '',
+              latitude: p.geometry?.location?.lat ?? userLocation.lat,
+              longitude: p.geometry?.location?.lng ?? userLocation.lon,
+            };
+          })
+        );
 
-        let rankedPlaces = enriched;
-        if (keywords.length > 0) {
+        // 2.4. AI-ранжування результатів за ключовими словами
+        let rankedPlaces = parsed;
+
+        if (aiKeywords.length > 0) {
+          setLoadingText('Ранжуємо результати за допомогою ШІ…');
           try {
-            const ranked = await rankPlacesByRelevance(enriched, keywords);
-
+            const ranked = await rankPlacesByRelevance(parsed, aiKeywords);
             if (Array.isArray(ranked) && ranked.length > 0) {
               rankedPlaces = ranked;
             } else {
-              console.log("⚠️ Rank returned invalid data:", ranked);
-              rankedPlaces = enriched; // fallback
+              console.log('⚠️ rankPlacesByRelevance повернув некоректні дані:', ranked);
             }
-
           } catch (e) {
-            console.log("⚠️ Rank failed:", e);
-            rankedPlaces = enriched;
+            console.log('⚠️ Помилка при ранжуванні:', e);
           }
         }
 
         console.log('Ranked places:', rankedPlaces);
         setPlaces(rankedPlaces);
       } catch (err) {
-        console.log('AI/Geoapify Error:', err);
-      }finally {
-      setLoading(false);
-      setLoadingText("Пошук…");}
+        console.log('AI/Google Places Error:', err);
+        setPlaces([]);
+      } finally {
+        setLoading(false);
+        setLoadingText('Пошук…');
+      }
     })();
   }, [searchQuery, userLocation]);
 
+  // ─── 3. Обробка натиску на заклад ────────────────────────────────────
   const handlePlaceSelect = (place: Place) => {
     setSelectedPlace(place);
     router.push({
@@ -246,6 +189,8 @@ export default function MapScreen() {
       params: { placeId: place.id },
     });
   };
+
+  // ─── 4. Центрування карти на користувачі ─────────────────────────────
   const centerOnUser = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
@@ -267,6 +212,7 @@ export default function MapScreen() {
     );
   };
 
+  // ─── 5. UI ────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -275,15 +221,16 @@ export default function MapScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Результати пошуку</Text>
         {searchQuery && <Text style={styles.searchQuery}>"{searchQuery}"</Text>}
-        {/* 🔵 Show AI understanding */}
-        {aiCategory && (
+
+        {(aiCategory || aiKeywords.length > 0) && (
           <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4 }}>
-            Категорія: {aiCategory} | Ключові слова: {aiKeywords.join(', ')}
+            {aiCategory ? `Категорія: ${aiCategory} | ` : ''}
+            Ключові слова: {aiKeywords.join(', ')}
           </Text>
         )}
       </View>
 
-      {/* MAP (Geoapify tiles + user location) */}
+      {/* MAP */}
       <View style={styles.mapContainer}>
         <MapView
           ref={mapRef}
@@ -291,49 +238,25 @@ export default function MapScreen() {
           showsUserLocation
           showsCompass
           initialRegion={{
-            latitude: 49.8397, // Львів як старт
-            longitude: 24.0297,
+            latitude: userLocation?.lat ?? 49.8397,
+            longitude: userLocation?.lon ?? 24.0297,
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           }}
         >
-          {/* Geoapify tile layer */}
-          <UrlTile
-             urlTemplate={`${BACKEND_URL}/maps/tiles/osm-carto/{z}/{x}/{y}.png`}
-             maximumZ={20}
-             zIndex={0}
-          />
-
-          {/* Маркери із твоїх places (тимчасово координати за id) */}
-          {(!places || places.length === 0) && (
-            <Text
-              style={{
-                fontSize: 16,
-                color: 'red',
-                position: 'absolute',
-                top: 20,
+          {places.map((place, i) => (
+            <Marker
+              key={place.id || i.toString()}
+              coordinate={{
+                latitude: place.latitude,
+                longitude: place.longitude,
               }}
-            >
-              Немає результатів для відображення
-            </Text>
-          )}
-
-          {places?.map((place, i) => {
-            console.log('Рендер маркера:', place);
-            return (
-              <Marker
-                key={i}
-                coordinate={{
-                  latitude: place.latitude,
-                  longitude: place.longitude,
-                }}
-                title={place.name}
-              />
-            );
-          })}
+              title={place.name}
+            />
+          ))}
         </MapView>
 
-        {/* Кнопка центрування на поточній локації */}
+        {/* Кнопка центрування */}
         <TouchableOpacity
           style={styles.locationButton}
           activeOpacity={0.8}
@@ -359,19 +282,21 @@ export default function MapScreen() {
               onPress={() => handlePlaceSelect(place)}
               activeOpacity={0.7}
             >
-              <Image source={{ uri: place.image }} style={styles.placeImage} />
+              {!!place.image && (
+                <Image source={{ uri: place.image }} style={styles.placeImage} />
+              )}
 
               <View style={styles.placeInfo}>
                 <View style={styles.placeHeader}>
                   <Text style={styles.placeName}>{place.name}</Text>
                   <View style={styles.ratingContainer}>
                     <Star size={14} color="#FF9500" fill="#FF9500" />
-                    <Text style={styles.rating}>{place.rating}</Text>
+                    <Text style={styles.rating}>{place.rating.toFixed(1)}</Text>
                   </View>
                 </View>
 
                 <Text style={styles.placeCategory}>{place.category}</Text>
-                <Text style={styles.placeDescription}>{place.description}</Text>
+                <Text style={styles.placeDescription}>{place.address}</Text>
 
                 <View style={styles.placeDetails}>
                   <View style={styles.detailItem}>
@@ -395,20 +320,22 @@ export default function MapScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.directionsButton}
-                  activeOpacity={0.8}
-                >
+                <TouchableOpacity style={styles.directionsButton} activeOpacity={0.8}>
                   <ExternalLink size={16} color="#007AFF" />
-                  <Text style={styles.directionsText}>
-                    Відкрити в Google Maps
-                  </Text>
+                  <Text style={styles.directionsText}>Відкрити в Google Maps</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))}
+
+          {places.length === 0 && !loading && (
+            <Text style={{ textAlign: 'center', color: '#8E8E93', marginTop: 16 }}>
+              Немає результатів для відображення
+            </Text>
+          )}
         </ScrollView>
       </View>
+
       {loading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingBox}>
@@ -417,7 +344,6 @@ export default function MapScreen() {
           </View>
         </View>
       )}
-
     </SafeAreaView>
   );
 }
@@ -447,25 +373,6 @@ const styles = StyleSheet.create({
   mapContainer: {
     height: height * 0.35,
     position: 'relative',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1D1D1F',
-    marginTop: 12,
-  },
-  mapPlaceholderSubtext: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginTop: 4,
   },
   locationButton: {
     position: 'absolute',
@@ -585,38 +492,34 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 6,
   },
-
   loadingOverlay: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(255,255,255,0.85)",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 100,
-},
-
-loadingBox: {
-  backgroundColor: "#fff",
-  padding: 20,
-  borderRadius: 16,
-  shadowColor: "#000",
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  alignItems: "center",
-  width: "80%",
-},
-
-loadingSpinner: {
-  fontSize: 32,
-  marginBottom: 10,
-},
-
-loadingText: {
-  fontSize: 16,
-  color: "#333",
-  textAlign: "center",
-},
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingBox: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    alignItems: 'center',
+    width: '80%',
+  },
+  loadingSpinner: {
+    fontSize: 32,
+    marginBottom: 10,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
 });
